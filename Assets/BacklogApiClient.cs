@@ -47,6 +47,14 @@ namespace NulabCup
         }
 
         /// <summary>
+        /// 課題更新（担当者アサイン）用の URL を取得する。
+        /// </summary>
+        public static string GetUpdateIssueUrl(int issueId)
+        {
+            return $"{BaseUrl}/issues/{issueId}?apiKey={ApiKey}";
+        }
+
+        /// <summary>
         /// 優先度一覧を取得するコルーチン。
         /// </summary>
         public static IEnumerator FetchPriorities(System.Action<List<Priority>> onSuccess, System.Action<string> onError)
@@ -101,6 +109,34 @@ namespace NulabCup
 
                 var json = req.downloadHandler.text;
                 onSuccess?.Invoke(json);
+            }
+        }
+
+        /// <summary>
+        /// 課題の担当者をアサインするコルーチン（PATCH）。
+        /// </summary>
+        public static IEnumerator AssignIssue(
+            int issueId,
+            int assigneeId,
+            System.Action onSuccess,
+            System.Action<string> onError)
+        {
+            var url = GetUpdateIssueUrl(issueId);
+            var form = new WWWForm();
+            form.AddField("assigneeId", assigneeId);
+
+            using (var req = UnityWebRequest.Post(url, form))
+            {
+                req.method = "PATCH";
+                yield return req.SendWebRequest();
+
+                if (req.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke($"{req.responseCode}: {req.error}");
+                    yield break;
+                }
+
+                onSuccess?.Invoke();
             }
         }
     }
