@@ -64,6 +64,9 @@ jobs:
             CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
           run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" restore
 
+        - name: Patch MetaXR Simulator
+          run: ./scripts/patch-meta-xr-simulator.sh
+
         - name: Unity Build
           run: |
             mkdir -p "$(dirname "$OUTPUT_APK_PATH")"
