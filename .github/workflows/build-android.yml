@@ -1,6 +1,6 @@
 name: Unity Android Build
 
-  on:
+on:
     push:
       tags:
         - "v*"
