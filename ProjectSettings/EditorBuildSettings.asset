@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/nulab_cup_new.unity
     guid: 636bf2298cff5a042b633c6b17d28200
+  - enabled: 0
+    path: Assets/UISet.unity
+    guid: 048576d0ab7764d90a936c9af7354594
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 936ee0fe6095c0f4087f6eda73117de6, type: 2}
