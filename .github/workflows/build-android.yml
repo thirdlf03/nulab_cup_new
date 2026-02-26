@@ -1,112 +1,136 @@
 name: Unity Android Build
 
 on: [push]
+
 permissions:
-    contents: write
+  contents: write
 
 env:
-    HOME: /home/ubuntu
-    UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"
-    UNITY_BUILD_METHOD: "CIBuilder.BuildProject"
-    SOURCE_APK_PATH: "Builds/app.apk"
-    OUTPUT_APK_BASENAME: "app"
-    UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
+  HOME: /home/ubuntu
+  UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"
+  UNITY_BUILD_METHOD: "CIBuilder.BuildProject"
+  SOURCE_APK_PATH: "Builds/app.apk"
+  OUTPUT_APK_BASENAME: "app"
+  UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
 
 jobs:
-    build:
-      runs-on:
-        - codebuild-unity-android-build-${{ github.run_id }}-${{ github.run_attempt }}
+  build:
+    runs-on:
+      - codebuild-unity-android-build-${{ github.run_id }}-${{ github.run_attempt }}
 
-      steps:
-        - name: Fix home directory permissions
-          run: |
-            chmod a+rx /home/ubuntu
-            chmod -R a+rwX /home/ubuntu/.local 2>/dev/null || true
-            chmod -R a+rwX /home/ubuntu/.config 2>/dev/null || true
-            chmod -R a+rwX /home/ubuntu/.gradle 2>/dev/null || true
-        - name: Check required tools
-          run: |
-            command -v aws    >/dev/null 2>&1 || { echo "aws cli required"; exit 1; }
-            command -v git    >/dev/null 2>&1 || { echo "git required"; exit 1; }
-            command -v git-lfs >/dev/null 2>&1 || { echo "git-lfs required"; exit 1; }
-            command -v gh     >/dev/null 2>&1 || { echo "gh required"; exit 1; }
-            command -v tar    >/dev/null 2>&1 || { echo "tar required"; exit 1; }
-            command -v zstd   >/dev/null 2>&1 || { echo "zstd required"; exit 1; }
+    steps:
+      - name: Fix home directory permissions
+        run: |
+          chmod a+rx /home/ubuntu
+          chmod -R a+rwX /home/ubuntu/.local 2>/dev/null || true
+          chmod -R a+rwX /home/ubuntu/.config 2>/dev/null || true
+          chmod -R a+rwX /home/ubuntu/.gradle 2>/dev/null || true
 
-        - name: Checkout
-          uses: actions/checkout@v4
-          with:
-            lfs: true
+      - name: Check required tools
+        run: |
+          command -v aws >/dev/null 2>&1 || { echo "aws cli required"; exit 1; }
+          command -v git >/dev/null 2>&1 || { echo "git required"; exit 1; }
+          command -v git-lfs >/dev/null 2>&1 || { echo "git-lfs required"; exit 1; }
+          command -v gh >/dev/null 2>&1 || { echo "gh required"; exit 1; }
+          command -v tar >/dev/null 2>&1 || { echo "tar required"; exit 1; }
+          command -v zstd >/dev/null 2>&1 || { echo "zstd required"; exit 1; }
 
-        - name: Git LFS Pull
-          run: git lfs pull
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
 
-        - name: Set build variables
-          run: |
-            if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
-              RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-              SHOULD_UPLOAD_GH_RELEASE="1"
-            else
-              SHORT_SHA="$(printf '%s' "${GITHUB_SHA:-unknown}" | cut -c1-8)"
-              RELEASE_TAG="snapshot-${SHORT_SHA}"
-              SHOULD_UPLOAD_GH_RELEASE="0"
-            fi
-            SAFE_RELEASE_TAG="$(printf '%s' "$RELEASE_TAG" | tr '/:' '--')"
-            echo "RELEASE_TAG=$RELEASE_TAG"                             >> "$GITHUB_ENV"
-            echo "SHOULD_UPLOAD_GH_RELEASE=$SHOULD_UPLOAD_GH_RELEASE"  >> "$GITHUB_ENV"
-            echo "OUTPUT_APK_PATH=Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.apk" >> "$GITHUB_ENV"
+      - name: Git LFS Pull
+        run: git lfs pull
 
-        - name: Restore Unity Cache
-          env:
-            UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
-            UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
-            UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
-            CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
-          run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" restore
+      - name: Set build variables
+        run: |
+          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+            SHOULD_UPLOAD_GH_RELEASE="1"
+          else
+            SHORT_SHA="$(printf '%s' "${GITHUB_SHA:-unknown}" | cut -c1-8)"
+            RELEASE_TAG="snapshot-${SHORT_SHA}"
+            SHOULD_UPLOAD_GH_RELEASE="0"
+          fi
+          SAFE_RELEASE_TAG="$(printf '%s' "$RELEASE_TAG" | tr '/:' '--')"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "SHOULD_UPLOAD_GH_RELEASE=$SHOULD_UPLOAD_GH_RELEASE" >> "$GITHUB_ENV"
+          echo "OUTPUT_APK_PATH=Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.apk" >> "$GITHUB_ENV"
 
-        - name: Patch MetaXR Simulator
-          run: ./scripts/patch-meta-xr-simulator.sh
+      - name: Restore Unity Cache
+        env:
+          UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
+          UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
+          UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
+          CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
+        run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" restore
 
-        - name: Unity Build
-          run: |
-            mkdir -p "$(dirname "$OUTPUT_APK_PATH")"
-            "$UNITY_PATH" \
-              -batchmode \
-              -nographics \
-              -quit \
-              -projectPath "$GITHUB_WORKSPACE" \
-              -buildTarget Android \
-              -executeMethod "$UNITY_BUILD_METHOD" \
-              -logFile "$GITHUB_WORKSPACE/unity-build.log"
+      - name: Unity Build (first)
+        id: unity_build_first
+        continue-on-error: true
+        run: |
+          mkdir -p "$(dirname "$OUTPUT_APK_PATH")"
+          "$UNITY_PATH" \
+            -batchmode \
+            -nographics \
+            -quit \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget Android \
+            -executeMethod "$UNITY_BUILD_METHOD" \
+            -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
-        - name: Check and rename APK
-          run: |
-            if [ -f "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" ]; then
-              echo "APK found: $OUTPUT_APK_PATH"
-            elif [ -f "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" ]; then
-              mv "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH"
-            else
-              echo "APK not found"; exit 1
-            fi
+      - name: Patch MetaXR Simulator (only known error)
+        if: steps.unity_build_first.outcome == 'failure'
+        run: |
+          if grep -q "downloadedInstallerPath' does not exist in the current context" "$GITHUB_WORKSPACE/unity-build.log"; then
+            bash "$GITHUB_WORKSPACE/scripts/patch-meta-xr-simulator.sh" "$GITHUB_WORKSPACE"
+          else
+            echo "First build failed for a different reason."
+            exit 1
+          fi
 
-        - name: Print build log
-          if: always()
-          run: cat "$GITHUB_WORKSPACE/unity-build.log" || true
+      - name: Unity Build (retry after patch)
+        if: steps.unity_build_first.outcome == 'failure'
+        run: |
+          "$UNITY_PATH" \
+            -batchmode \
+            -nographics \
+            -quit \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget Android \
+            -executeMethod "$UNITY_BUILD_METHOD" \
+            -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
-        - name: Save Unity Cache
-          if: success()
-          env:
-            UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
-            UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
-            UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
-            CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
-          run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" save
+      - name: Check and rename APK
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" ]; then
+            echo "APK found: $OUTPUT_APK_PATH"
+          elif [ -f "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" ]; then
+            mv "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH"
+          else
+            echo "APK not found"
+            exit 1
+          fi
 
-        - name: Upload GitHub Release
-          if: success() && env.SHOULD_UPLOAD_GH_RELEASE == '1'
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: |
-            gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-              gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" --title "$RELEASE_TAG" --notes "Automated Unity Android build"
-            gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" --repo "${{github.repository }}" --clobber
+      - name: Print build log
+        if: always()
+        run: cat "$GITHUB_WORKSPACE/unity-build.log" || true
+
+      - name: Save Unity Cache
+        if: success()
+        env:
+          UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
+          UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
+          UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
+          CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
+        run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" save
+
+      - name: Upload GitHub Release
+        if: success() && env.SHOULD_UPLOAD_GH_RELEASE == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" --title "$RELEASE_TAG" --notes "Automated Unity Android build"
+          gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" --repo "${{ github.repository }}" --clobber
