@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Fusion;
 using UnityEngine;
 using Oculus.Interaction.Input;
 using Meta.XR.MRUtilityKit;
@@ -31,6 +32,9 @@ namespace NulabCup
         [SerializeField, Min(0.5f)] float m_FloorRayStartHeight = 2.5f;
         [SerializeField, Min(0.5f)] float m_FloorRayDistance = 6.0f;
         [SerializeField] bool m_DebugFloorRay = false;
+
+        [Header("Networking")]
+        [SerializeField] NetworkRunner m_Runner;
 
         readonly List<GameObject> m_SpawnedCubes = new();
         float m_LastSpawnTime;
@@ -136,7 +140,7 @@ namespace NulabCup
             return null;
         }
 
-        bool TryResolveRightHandFromSource(Object source, out IHand hand)
+        bool TryResolveRightHandFromSource(UnityEngine.Object source, out IHand hand)
         {
             hand = null;
             if (source == null)
@@ -287,29 +291,86 @@ namespace NulabCup
             }
 
             var spawnPos = new Vector3(spawnXZ.x, baseHeight + m_RainHeight, spawnXZ.z);
-            var cube = Instantiate(m_CubePrefab, spawnPos, Quaternion.identity);
+            var runner = ResolveRunner();
+            bool isNetworkSpawn = IsNetworkSpawnEnabled(runner);
+            GameObject cube = null;
 
-            if (cube.TryGetComponent<Rigidbody>(out var rb))
+            if (isNetworkSpawn)
             {
-#if UNITY_6000_0_OR_NEWER
-                rb.linearVelocity = Vector3.zero;
-#else
-#pragma warning disable CS0618
-                rb.velocity = Vector3.zero;
-#pragma warning restore CS0618
-#endif
-                rb.angularVelocity = Vector3.zero;
+                var networkObject = runner.Spawn(
+                    m_CubePrefab,
+                    spawnPos,
+                    Quaternion.identity,
+                    null,
+                    (_, spawnedObject) => ResetRigidbodyVelocity(spawnedObject.gameObject));
+
+                if (networkObject != null)
+                    cube = networkObject.gameObject;
+            }
+            else
+            {
+                cube = Instantiate(m_CubePrefab, spawnPos, Quaternion.identity);
+                ResetRigidbodyVelocity(cube);
             }
 
-            m_SpawnedCubes.Add(cube);
+            if (cube == null)
+                return;
 
+            m_SpawnedCubes.Add(cube);
+            RemoveOverflowCubes(runner, isNetworkSpawn);
+        }
+
+        NetworkRunner ResolveRunner()
+        {
+            if (m_Runner != null)
+                return m_Runner;
+
+#if UNITY_2023_1_OR_NEWER
+            m_Runner = FindFirstObjectByType<NetworkRunner>();
+#else
+            m_Runner = FindObjectOfType<NetworkRunner>();
+#endif
+            return m_Runner;
+        }
+
+        static bool IsNetworkSpawnEnabled(NetworkRunner runner)
+        {
+            return runner != null && runner.IsRunning && !runner.IsSinglePlayer;
+        }
+
+        void RemoveOverflowCubes(NetworkRunner runner, bool isNetworkSpawn)
+        {
             while (m_SpawnedCubes.Count > m_MaxCubes)
             {
                 var oldest = m_SpawnedCubes[0];
                 m_SpawnedCubes.RemoveAt(0);
-                if (oldest != null)
-                    Destroy(oldest);
+                if (oldest == null)
+                    continue;
+
+                if (isNetworkSpawn && oldest.TryGetComponent<NetworkObject>(out var networkObject))
+                {
+                    if (networkObject.HasStateAuthority)
+                        runner.Despawn(networkObject);
+                    continue;
+                }
+
+                Destroy(oldest);
             }
+        }
+
+        static void ResetRigidbodyVelocity(GameObject spawnedObject)
+        {
+            if (spawnedObject == null || !spawnedObject.TryGetComponent<Rigidbody>(out var rb))
+                return;
+
+#if UNITY_6000_0_OR_NEWER
+            rb.linearVelocity = Vector3.zero;
+#else
+#pragma warning disable CS0618
+            rb.velocity = Vector3.zero;
+#pragma warning restore CS0618
+#endif
+            rb.angularVelocity = Vector3.zero;
         }
 
         bool TryGetFloorHeight(Vector3 worldPosition, out float floorY)

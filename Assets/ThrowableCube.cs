@@ -1,4 +1,5 @@
 using UnityEngine;
+using Fusion;
 using Oculus.Interaction;
 using Oculus.Interaction.HandGrab;
 using Meta.XR.MRUtilityKit;
@@ -35,6 +36,7 @@ namespace NulabCup
 
         Rigidbody m_Rigidbody;
         Collider m_Collider;
+        NetworkObject m_NetworkObject;
 
         void Reset()
         {
@@ -59,6 +61,9 @@ namespace NulabCup
 
         void FixedUpdate()
         {
+            if (IsNetworkProxy() && m_Rigidbody != null)
+                m_Rigidbody.isKinematic = true;
+
             ApplyMrukGroundPhysics();
         }
 
@@ -93,10 +98,16 @@ namespace NulabCup
 
             if (!TryGetComponent(out m_Collider))
                 m_Collider = null;
+
+            if (!TryGetComponent(out m_NetworkObject))
+                m_NetworkObject = null;
         }
 
         void ApplyMrukGroundPhysics()
         {
+            if (IsNetworkProxy())
+                return;
+
             if (!m_EnableMrukGroundPhysics || m_Rigidbody == null || m_Collider == null || m_Rigidbody.isKinematic)
                 return;
 
@@ -152,6 +163,18 @@ namespace NulabCup
             }
 
             SetLinearVelocity(hit.normal * bouncedNormalSpeed + tangentVelocity * m_TangentDamping);
+        }
+
+        bool IsNetworkProxy()
+        {
+            if (m_NetworkObject == null)
+                return false;
+
+            var runner = m_NetworkObject.Runner;
+            if (runner == null || !runner.IsRunning || runner.IsSinglePlayer)
+                return false;
+
+            return !m_NetworkObject.HasStateAuthority;
         }
 
         Vector3 GetLinearVelocity()
