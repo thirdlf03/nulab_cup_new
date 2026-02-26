@@ -12,6 +12,11 @@ env:
   SOURCE_AAB_PATH: "Builds/app.aab"
   OUTPUT_APK_BASENAME: "app"
   UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
+  UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET || secrets.UNITY_S3_CACHE_BUCKET }}
+  UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX || secrets.UNITY_S3_CACHE_PREFIX }}
+  UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
+  CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
+  UPLOAD_SNAPSHOT_RELEASE: ${{ vars.UPLOAD_SNAPSHOT_RELEASE || '1' }}
 
 jobs:
   build:
@@ -51,7 +56,7 @@ jobs:
           else
             SHORT_SHA="$(printf '%s' "${GITHUB_SHA:-unknown}" | cut -c1-8)"
             RELEASE_TAG="snapshot-${SHORT_SHA}"
-            SHOULD_UPLOAD_GH_RELEASE="0"
+            SHOULD_UPLOAD_GH_RELEASE="${UPLOAD_SNAPSHOT_RELEASE:-1}"
           fi
           SAFE_RELEASE_TAG="$(printf '%s' "$RELEASE_TAG" | tr '/:' '--')"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
@@ -61,11 +66,6 @@ jobs:
           echo "OUTPUT_ARTIFACT_PATH=Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.apk" >> "$GITHUB_ENV"
 
       - name: Restore Unity Cache
-        env:
-          UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
-          UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
-          UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
-          CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
         run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" restore
 
       - name: Inject CI build entrypoint
@@ -221,11 +221,6 @@ jobs:
 
       - name: Save Unity Cache
         if: success()
-        env:
-          UNITY_S3_CACHE_BUCKET: ${{ vars.UNITY_S3_CACHE_BUCKET }}
-          UNITY_S3_CACHE_PREFIX: ${{ vars.UNITY_S3_CACHE_PREFIX }}
-          UNITY_S3_CACHE_FALLBACK_BRANCH: ${{ vars.UNITY_S3_CACHE_FALLBACK_BRANCH || 'main' }}
-          CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
         run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" save
 
       - name: Upload GitHub Release
