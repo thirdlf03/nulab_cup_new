@@ -7,8 +7,7 @@ permissions:
 
 env:
   HOME: /home/ubuntu
-  UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"
-  UNITY_BUILD_METHOD: "CIBuilder.BuildProject"
+  UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"=
   SOURCE_APK_PATH: "Builds/app.apk"
   OUTPUT_APK_BASENAME: "app"
   UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
@@ -77,7 +76,6 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
-            -executeMethod "$UNITY_BUILD_METHOD" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Patch MetaXR Simulator (only known error)
@@ -99,7 +97,6 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
-            -executeMethod "$UNITY_BUILD_METHOD" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Check and rename APK
