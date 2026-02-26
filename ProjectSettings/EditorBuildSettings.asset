@@ -6,7 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/nulab_cup_new.unity
+    path: Assets/Scenes/nulab_cup_new.unity
     guid: 636bf2298cff5a042b633c6b17d28200
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

@@ -6,6 +6,7 @@ permissions:
 
 env:
     HOME: /home/ubuntu
+    UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"
     UNITY_BUILD_METHOD: "CIBuilder.BuildProject"
     SOURCE_APK_PATH: "Builds/app.apk"
     OUTPUT_APK_BASENAME: "app"
