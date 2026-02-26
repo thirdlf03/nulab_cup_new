@@ -1,9 +1,6 @@
 name: Unity Android Build
 
-on:
-    push:
-      tags:
-        - "v*"
+on: [push]
 permissions:
     contents: write
 
