@@ -9,6 +9,7 @@ env:
   HOME: /home/ubuntu
   UNITY_SCENES: "Assets/Scenes/nulab_cup_new.unity"
   SOURCE_APK_PATH: "Builds/app.apk"
+  SOURCE_AAB_PATH: "Builds/app.aab"
   OUTPUT_APK_BASENAME: "app"
   UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
 
@@ -54,8 +55,10 @@ jobs:
           fi
           SAFE_RELEASE_TAG="$(printf '%s' "$RELEASE_TAG" | tr '/:' '--')"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "SAFE_RELEASE_TAG=$SAFE_RELEASE_TAG" >> "$GITHUB_ENV"
           echo "SHOULD_UPLOAD_GH_RELEASE=$SHOULD_UPLOAD_GH_RELEASE" >> "$GITHUB_ENV"
           echo "OUTPUT_APK_PATH=Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.apk" >> "$GITHUB_ENV"
+          echo "OUTPUT_ARTIFACT_PATH=Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.apk" >> "$GITHUB_ENV"
 
       - name: Restore Unity Cache
         env:
@@ -76,6 +79,7 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
+            -executeMethod "CIBuilder.BuildProject" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Patch MetaXR Simulator (only known error)
@@ -97,32 +101,43 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
+            -executeMethod "CIBuilder.BuildProject" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Check and rename APK
         run: |
-          if [ -f "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" ]; then
-            echo "APK found: $OUTPUT_APK_PATH"
+          if [ -f "$GITHUB_WORKSPACE/$OUTPUT_ARTIFACT_PATH" ]; then
+            echo "Artifact found: $OUTPUT_ARTIFACT_PATH"
           elif [ -f "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" ]; then
-            mv "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH"
-            echo "Renamed APK from $SOURCE_APK_PATH to $OUTPUT_APK_PATH"
+            mv "$GITHUB_WORKSPACE/$SOURCE_APK_PATH" "$GITHUB_WORKSPACE/$OUTPUT_ARTIFACT_PATH"
+            echo "Renamed APK from $SOURCE_APK_PATH to $OUTPUT_ARTIFACT_PATH"
+          elif [ -f "$GITHUB_WORKSPACE/$SOURCE_AAB_PATH" ]; then
+            OUTPUT_ARTIFACT_PATH="Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.aab"
+            mv "$GITHUB_WORKSPACE/$SOURCE_AAB_PATH" "$GITHUB_WORKSPACE/$OUTPUT_ARTIFACT_PATH"
+            echo "Renamed AAB from $SOURCE_AAB_PATH to $OUTPUT_ARTIFACT_PATH"
+            echo "OUTPUT_ARTIFACT_PATH=$OUTPUT_ARTIFACT_PATH" >> "$GITHUB_ENV"
           else
-            echo "APK not found at expected paths. Searching fallback locations..."
-            CANDIDATE_APK=""
+            echo "Artifact not found at expected paths. Searching fallback locations..."
+            CANDIDATE_ARTIFACT=""
             if [ -d "$GITHUB_WORKSPACE/Builds" ]; then
-              CANDIDATE_APK="$(find "$GITHUB_WORKSPACE/Builds" -type f -name "*.apk" | sort | head -n 1)"
+              CANDIDATE_ARTIFACT="$(find "$GITHUB_WORKSPACE/Builds" -type f \( -name "*.apk" -o -name "*.aab" \) | sort | head -n 1)"
             fi
-            if [ -z "$CANDIDATE_APK" ]; then
-              CANDIDATE_APK="$(find "$GITHUB_WORKSPACE" -type f -name "*.apk" -not -path "*/Library/*" -not -path "*/.git/*" | sort | head -n 1)"
+            if [ -z "$CANDIDATE_ARTIFACT" ]; then
+              CANDIDATE_ARTIFACT="$(find "$GITHUB_WORKSPACE" -type f \( -name "*.apk" -o -name "*.aab" \) -not -path "*/Library/*" -not -path "*/.git/*" | sort | head -n 1)"
             fi
 
-            if [ -n "$CANDIDATE_APK" ] && [ -f "$CANDIDATE_APK" ]; then
-              mv "$CANDIDATE_APK" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH"
-              echo "Moved fallback APK from ${CANDIDATE_APK#$GITHUB_WORKSPACE/} to $OUTPUT_APK_PATH"
+            if [ -n "$CANDIDATE_ARTIFACT" ] && [ -f "$CANDIDATE_ARTIFACT" ]; then
+              CANDIDATE_EXT="${CANDIDATE_ARTIFACT##*.}"
+              OUTPUT_ARTIFACT_PATH="Builds/${OUTPUT_APK_BASENAME}-${SAFE_RELEASE_TAG}.${CANDIDATE_EXT}"
+              mv "$CANDIDATE_ARTIFACT" "$GITHUB_WORKSPACE/$OUTPUT_ARTIFACT_PATH"
+              echo "Moved fallback artifact from ${CANDIDATE_ARTIFACT#$GITHUB_WORKSPACE/} to $OUTPUT_ARTIFACT_PATH"
+              echo "OUTPUT_ARTIFACT_PATH=$OUTPUT_ARTIFACT_PATH" >> "$GITHUB_ENV"
             else
-              echo "APK not found after fallback search."
-              echo "Workspace APK scan (for debug):"
-              find "$GITHUB_WORKSPACE" -type f -name "*.apk" -not -path "*/Library/*" -not -path "*/.git/*" | sort || true
+              echo "Artifact not found after fallback search."
+              echo "Workspace artifact scan (for debug):"
+              find "$GITHUB_WORKSPACE" -type f \( -name "*.apk" -o -name "*.aab" \) -not -path "*/Library/*" -not -path "*/.git/*" | sort || true
+              echo "Unity log hints:"
+              grep -E "Build completed|Build result|Output|AAB|APK|BuildPipeline" "$GITHUB_WORKSPACE/unity-build.log" | tail -n 50 || true
               exit 1
             fi
           fi
@@ -147,4 +162,4 @@ jobs:
         run: |
           gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
             gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" --title "$RELEASE_TAG" --notes "Automated Unity Android build"
-          gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" --repo "${{ github.repository }}" --clobber
+          gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_ARTIFACT_PATH" --repo "${{ github.repository }}" --clobber
