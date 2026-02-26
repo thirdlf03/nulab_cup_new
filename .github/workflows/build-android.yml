@@ -17,6 +17,12 @@ jobs:
         - codebuild-unity-android-build-${{ github.run_id }}-${{ github.run_attempt }}
 
       steps:
+        - name: Fix home directory permissions
+          run: |
+            chmod a+rx /home/ubuntu
+            chmod -R a+rwX /home/ubuntu/.local 2>/dev/null || true
+            chmod -R a+rwX /home/ubuntu/.config 2>/dev/null || true
+            chmod -R a+rwX /home/ubuntu/.gradle 2>/dev/null || true
         - name: Check required tools
           run: |
             command -v aws    >/dev/null 2>&1 || { echo "aws cli required"; exit 1; }
