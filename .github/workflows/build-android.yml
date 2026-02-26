@@ -4,18 +4,16 @@ on:
     push:
       tags:
         - "v*"
-    workflow_dispatch:
+permissions:
+contents: write
 
-  permissions:
-    contents: write
-
-  env:
+env:
     UNITY_BUILD_METHOD: "CIBuilder.BuildProject"
     SOURCE_APK_PATH: "Builds/app.apk"
     OUTPUT_APK_BASENAME: "app"
     UNITY_PATH: "/home/ubuntu/Unity/Hub/Editor/6000.3.9f1/Editor/Unity"
 
-  jobs:
+jobs:
     build:
       runs-on:
         - codebuild-unity-android-build-${{ github.run_id }}-${{ github.run_attempt }}
@@ -102,7 +100,5 @@ on:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           run: |
             gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-              gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" --title "$RELEASE_TAG"
-  --notes "Automated Unity Android build"
-            gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" --repo "${{
-  github.repository }}" --clobber
+              gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" --title "$RELEASE_TAG" --notes "Automated Unity Android build"
+            gh release upload "$RELEASE_TAG" "$GITHUB_WORKSPACE/$OUTPUT_APK_PATH" --repo "${{github.repository }}" --clobber
