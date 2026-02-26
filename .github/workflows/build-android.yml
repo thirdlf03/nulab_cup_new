@@ -68,6 +68,79 @@ jobs:
           CACHE_NAMESPACE: ${{ vars.CACHE_NAMESPACE || 'unity-6000.3.9f1' }}
         run: bash "$GITHUB_WORKSPACE/scripts/unity-s3-cache.sh" restore
 
+      - name: Inject CI build entrypoint
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/Assets/Editor"
+          cat > "$GITHUB_WORKSPACE/Assets/Editor/CIEntryPoint.cs" <<'EOF'
+          using System;
+          using System.IO;
+          using System.Linq;
+          using UnityEditor;
+          using UnityEditor.Build.Reporting;
+
+          public static class CIEntryPoint
+          {
+              public static void BuildAndroid()
+              {
+                  var outputPath = Environment.GetEnvironmentVariable("OUTPUT_ARTIFACT_PATH");
+                  if (string.IsNullOrWhiteSpace(outputPath))
+                  {
+                      outputPath = Environment.GetEnvironmentVariable("OUTPUT_APK_PATH");
+                  }
+                  if (string.IsNullOrWhiteSpace(outputPath))
+                  {
+                      outputPath = "Builds/app.apk";
+                  }
+
+                  var scenesEnv = Environment.GetEnvironmentVariable("UNITY_SCENES");
+                  string[] scenes;
+                  if (!string.IsNullOrWhiteSpace(scenesEnv))
+                  {
+                      scenes = scenesEnv
+                          .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                          .Select(scene => scene.Trim())
+                          .ToArray();
+                  }
+                  else
+                  {
+                      scenes = EditorBuildSettings.scenes
+                          .Where(scene => scene.enabled)
+                          .Select(scene => scene.path)
+                          .ToArray();
+                  }
+
+                  if (scenes.Length == 0)
+                  {
+                      throw new Exception("No scenes configured for build.");
+                  }
+
+                  var outputDir = Path.GetDirectoryName(outputPath);
+                  if (!string.IsNullOrEmpty(outputDir))
+                  {
+                      Directory.CreateDirectory(outputDir);
+                  }
+
+                  EditorUserBuildSettings.buildAppBundle =
+                      Path.GetExtension(outputPath).Equals(".aab", StringComparison.OrdinalIgnoreCase);
+
+                  var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                  {
+                      scenes = scenes,
+                      locationPathName = outputPath,
+                      target = BuildTarget.Android,
+                      options = BuildOptions.None,
+                  });
+
+                  if (report.summary.result != BuildResult.Succeeded)
+                  {
+                      throw new Exception("Unity Android build failed: " + report.summary.result);
+                  }
+
+                  Console.WriteLine("Unity Android build succeeded: " + outputPath);
+              }
+          }
+          EOF
+
       - name: Unity Build (first)
         id: unity_build_first
         continue-on-error: true
@@ -79,7 +152,7 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
-            -executeMethod "CIBuilder.BuildProject" \
+            -executeMethod "CIEntryPoint.BuildAndroid" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Patch MetaXR Simulator (only known error)
@@ -101,7 +174,7 @@ jobs:
             -quit \
             -projectPath "$GITHUB_WORKSPACE" \
             -buildTarget Android \
-            -executeMethod "CIBuilder.BuildProject" \
+            -executeMethod "CIEntryPoint.BuildAndroid" \
             -logFile "$GITHUB_WORKSPACE/unity-build.log"
 
       - name: Check and rename APK
